@@ -20,23 +20,19 @@ load_dotenv()
 TOKEN = os.getenv("DISCORD_TOKEN")
 FFMPEG_PATH = os.getenv("FFMPEG_PATH", "ffmpeg")
 
-# YouTube authentication is optional. Cookies are useful when YouTube blocks
-# datacenter/server IPs with a bot-check.
 YOUTUBE_COOKIES_FILE = os.getenv("YOUTUBE_COOKIES_FILE")
 YOUTUBE_COOKIES_B64 = os.getenv("YOUTUBE_COOKIES_B64")
 YOUTUBE_BROWSER = os.getenv("YOUTUBE_BROWSER")
 YOUTUBE_BROWSER_PATH = os.getenv("YOUTUBE_BROWSER_PATH", "/usr/bin/chromium")
 
-# When logged-in cookies are supplied, yt-dlp's implicit "default" client
-# selection can include tv_downgraded, which currently has a known YouTube
-# "The page needs to be reloaded" failure. Explicitly use the documented
-# default+web_embedded workaround first, then keep the other clients as
-# fallbacks because YouTube changes which clients work over time.
+# Do not use yt-dlp's implicit default client when cookies are supplied.
+# YouTube currently has a known failure where logged-in default selection
+# reaches tv_downgraded and returns "The page needs to be reloaded".
 YOUTUBE_CLIENT_PROFILES = (
-    ("default_web_embedded", ["default", "web_embedded"]),
     ("web_embedded", ["web_embedded"]),
     ("web_safari", ["web_safari"]),
     ("mweb", ["mweb"]),
+    ("default", ["default"]),
 )
 
 
@@ -84,19 +80,16 @@ def is_youtube_url(url: str) -> bool:
 
 
 def _clean_error(message: str) -> str:
-    """Remove ANSI terminal color codes before showing an error in Discord."""
     return re.sub(r"\x1b\[[0-9;]*m", "", message)
 
 
 def _build_ytdl_options(player_clients: list[str]) -> dict:
     options = copy.deepcopy(BASE_YTDL_OPTIONS)
-
     options["extractor_args"] = {
         "youtube": {
             "player_client": player_clients,
         }
     }
-
     options["extractor_args"]["youtubepot-wpc"] = {
         "browser_path": YOUTUBE_BROWSER_PATH,
     }
@@ -121,7 +114,6 @@ def _build_ytdl_options(player_clients: list[str]) -> dict:
             raise
 
         options["cookiefile"] = cookie_file.name
-
     elif YOUTUBE_BROWSER:
         options["cookiesfrombrowser"] = (YOUTUBE_BROWSER, None, None, None)
 
@@ -129,19 +121,15 @@ def _build_ytdl_options(player_clients: list[str]) -> dict:
 
 
 def extract_audio(url: str) -> tuple[str, str]:
-    """Return (title, direct_stream_url) for a YouTube URL."""
     last_error = "yt-dlp could not find a playable audio stream."
+    errors: list[str] = []
 
     for profile_name, player_clients in YOUTUBE_CLIENT_PROFILES:
         temporary_cookie_file: str | None = None
         try:
             options = _build_ytdl_options(player_clients)
             cookie_path = options.get("cookiefile")
-            if (
-                YOUTUBE_COOKIES_B64
-                and cookie_path
-                and cookie_path != YOUTUBE_COOKIES_FILE
-            ):
+            if YOUTUBE_COOKIES_B64 and cookie_path and cookie_path != YOUTUBE_COOKIES_FILE:
                 temporary_cookie_file = cookie_path
 
             with yt_dlp.YoutubeDL(options) as ydl:
@@ -150,10 +138,12 @@ def extract_audio(url: str) -> tuple[str, str]:
             if info and info.get("url"):
                 return info.get("title", "YouTube audio"), info["url"]
 
-            last_error = f"{profile_name}: yt-dlp returned no playable stream."
+            last_error = f"{profile_name}: no playable stream"
+            errors.append(last_error)
 
         except yt_dlp.utils.DownloadError as exc:
             last_error = _clean_error(str(exc))
+            errors.append(f"{profile_name}: {last_error}")
             continue
         finally:
             if temporary_cookie_file:
@@ -166,21 +156,18 @@ def extract_audio(url: str) -> tuple[str, str]:
         if YOUTUBE_COOKIES_FILE or YOUTUBE_COOKIES_B64 or YOUTUBE_BROWSER:
             raise RuntimeError(
                 "YouTube is still rejecting the Codespaces IP as a bot. "
-                "The configured browser/cookie session did not bypass the "
-                "challenge. Try refreshing the YouTube cookies."
+                "The configured browser/cookie session did not bypass the challenge."
             )
         raise RuntimeError(
             "YouTube is rejecting the Codespaces server IP as a bot. "
-            "Eli-Mini tried multiple YouTube player clients. For reliable "
-            "server-side playback, add YOUTUBE_COOKIES_B64 from a YouTube session."
+            "Add YOUTUBE_COOKIES_B64 from a YouTube session."
         )
 
     if "The page needs to be reloaded" in last_error:
         raise RuntimeError(
-            "YouTube rejected all configured player clients with "
+            "YouTube rejected every player client with "
             '"The page needs to be reloaded." '
-            "This is a current yt-dlp/YouTube issue. Try refreshing the "
-            "YouTube cookies if the problem persists."
+            f"Clients tried: {', '.join(errors)}"
         )
 
     raise RuntimeError(last_error)
