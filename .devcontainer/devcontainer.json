@@ -6,7 +6,8 @@
       "version": "22"
     }
   },
-  "postCreateCommand": "sudo apt-get update && sudo apt-get install -y --no-install-recommends chromium ffmpeg && python -m pip install -r requirements.txt",
+  "postCreateCommand": "sudo apt-get update && sudo apt-get install -y --no-install-recommends chromium ffmpeg && python -m pip install -U -r requirements.txt",
+  "postStartCommand": "python -m pip install -U -r requirements.txt",
   "remoteEnv": {
     "YOUTUBE_BROWSER_PATH": "/usr/bin/chromium"
   }
