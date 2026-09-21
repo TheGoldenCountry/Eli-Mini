@@ -25,15 +25,15 @@ YOUTUBE_COOKIES_B64 = os.getenv("YOUTUBE_COOKIES_B64")
 YOUTUBE_BROWSER = os.getenv("YOUTUBE_BROWSER")
 YOUTUBE_BROWSER_PATH = os.getenv("YOUTUBE_BROWSER_PATH", "/usr/bin/chromium")
 
-# When authenticated cookies are supplied, yt-dlp can select the
-# tv_downgraded client and hit YouTube's current "The page needs to be
-# reloaded" failure. The upstream workaround is to provide default and
-# web_embedded together so yt-dlp can fall through to web_embedded.
+# YouTube currently has a known failure where authenticated sessions select
+# tv_downgraded and return "The page needs to be reloaded". The upstream
+# workaround is to try default + web_embedded first. Some sessions still
+# reject authenticated extraction, so we also retry without cookies.
 YOUTUBE_CLIENT_PROFILES = (
-    ("default+web_embedded", ["default", "web_embedded"]),
-    ("web_embedded", ["web_embedded"]),
-    ("web_safari", ["web_safari"]),
-    ("mweb", ["mweb"]),
+    ("default+web_embedded", ["default", "web_embedded"], True),
+    ("web_embedded (no cookies)", ["web_embedded"], False),
+    ("web_safari (no cookies)", ["web_safari"], False),
+    ("mweb (no cookies)", ["mweb"], False),
 )
 
 
@@ -84,7 +84,7 @@ def _clean_error(message: str) -> str:
     return re.sub(r"\x1b\[[0-9;]*m", "", message)
 
 
-def _build_ytdl_options(player_clients: list[str]) -> dict:
+def _build_ytdl_options(player_clients: list[str], use_cookies: bool) -> dict:
     options = copy.deepcopy(BASE_YTDL_OPTIONS)
     options["extractor_args"] = {
         "youtube": {
@@ -94,6 +94,9 @@ def _build_ytdl_options(player_clients: list[str]) -> dict:
     options["extractor_args"]["youtubepot-wpc"] = {
         "browser_path": YOUTUBE_BROWSER_PATH,
     }
+
+    if not use_cookies:
+        return options
 
     if YOUTUBE_COOKIES_FILE:
         options["cookiefile"] = YOUTUBE_COOKIES_FILE
@@ -125,12 +128,17 @@ def extract_audio(url: str) -> tuple[str, str]:
     last_error = "yt-dlp could not find a playable audio stream."
     errors: list[str] = []
 
-    for profile_name, player_clients in YOUTUBE_CLIENT_PROFILES:
+    for profile_name, player_clients, use_cookies in YOUTUBE_CLIENT_PROFILES:
         temporary_cookie_file: str | None = None
         try:
-            options = _build_ytdl_options(player_clients)
+            options = _build_ytdl_options(player_clients, use_cookies)
             cookie_path = options.get("cookiefile")
-            if YOUTUBE_COOKIES_B64 and cookie_path and cookie_path != YOUTUBE_COOKIES_FILE:
+            if (
+                use_cookies
+                and YOUTUBE_COOKIES_B64
+                and cookie_path
+                and cookie_path != YOUTUBE_COOKIES_FILE
+            ):
                 temporary_cookie_file = cookie_path
 
             with yt_dlp.YoutubeDL(options) as ydl:
@@ -166,8 +174,8 @@ def extract_audio(url: str) -> tuple[str, str]:
 
     if "The page needs to be reloaded" in last_error:
         raise RuntimeError(
-            "YouTube rejected every player client with "
-            '"The page needs to be reloaded." '
+            "YouTube rejected every player client. "
+            'It returned "The page needs to be reloaded." '
             f"Clients tried: {', '.join(errors)}"
         )
 
