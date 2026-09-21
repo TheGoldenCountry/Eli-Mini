@@ -1,7 +1,11 @@
 {
   "name": "Eli-Mini",
-  "image": "mcr.microsoft.com/devcontainers/python:1.1.4-3.12-bookworm@sha256:a2c4de938fc8c5eb846711e807bfe50a0d809626b0631244411b8d6368590d43",
+  "image": "mcr.microsoft.com/devcontainers/base:bookworm",
   "features": {
+    "ghcr.io/devcontainers/features/python:1": {
+      "version": "3.12",
+      "installTools": true
+    },
     "ghcr.io/devcontainers/features/node:1": {
       "version": "22"
     }
@@ -9,7 +13,6 @@
   "postCreateCommand": "sudo apt-get update && sudo apt-get install -y --no-install-recommends chromium ffmpeg && python -m pip install -U pip && python -m pip install -U -r requirements.txt",
   "postStartCommand": "python -m pip install -U -r requirements.txt",
   "remoteEnv": {
-    "PATH": "/usr/local/bin:${containerEnv:PATH}",
     "YOUTUBE_BROWSER_PATH": "/usr/bin/chromium"
   },
   "customizations": {
