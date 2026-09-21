@@ -19,9 +19,9 @@ In the Discord Developer Portal:
 1. Create a new application.
 2. Open **Bot** and create the bot user.
 3. Copy the bot token.
-4. Keep the token private. Never commit it to Git.
+4. Keep the bot token private. Never commit it to Git.
 
-The bot needs permission to **View Channel**, **Connect**, and **Speak** in the voice channel you want to use. The invite should include the **bot** and **applications.commands** scopes.
+The bot needs permission to **View Channel**, **Connect**, and **Speak** in the voice channel. The invite should include the **bot** and **applications.commands** scopes.
 
 ### 2. Install Python dependencies
 
@@ -46,12 +46,12 @@ source .venv/bin/activate
 Then:
 
 ```bash
-pip install -r requirements.txt
+python -m pip install -r requirements.txt
 ```
 
 ### 3. Install FFmpeg
 
-FFmpeg must be installed separately and available on your system PATH because discord.py uses it to turn the extracted audio stream into Discord audio.
+FFmpeg must be installed and available on PATH unless `FFMPEG_PATH` points to the executable.
 
 Verify it with:
 
@@ -59,11 +59,9 @@ Verify it with:
 ffmpeg -version
 ```
 
-If FFmpeg is installed somewhere that is not on PATH, set `FFMPEG_PATH` in `.env` to the full path to the executable.
-
 ### 4. Configure the token
 
-Copy `.env.example` to `.env`:
+Copy `.env.example` to `.env` and set your token:
 
 ```text
 DISCORD_TOKEN=your-real-token
@@ -72,41 +70,70 @@ FFMPEG_PATH=ffmpeg
 
 Do not commit `.env`.
 
-### 5. Configure YouTube playback
+### 5. YouTube playback in GitHub Codespaces
 
-YouTube can return **"Sign in to confirm you're not a bot"** when yt-dlp requests playback. yt-dlp's current documentation recommends a PO Token Provider for affected clients, and Eli-Mini now includes the WebPoClient provider. urlyt-dlp PO Token Guidehttps://github.com/yt-dlp/yt-dlp/wiki/Po-Token-Guide
+YouTube currently uses several anti-bot and Proof of Origin (PO) Token checks. yt-dlp's current guidance recommends PO Token Provider plugins for clients that require them. The WebPoClient provider can mint PO tokens in Chromium and is installed by this project.
 
-The repository now includes a Codespaces configuration that installs:
+The bot now tries several YouTube client paths:
+
+1. `web_embedded`
+2. `web_safari`
+3. `mweb` with the WebPoClient PO-token provider
+4. yt-dlp's default client
+
+That fallback is deliberate: current YouTube behavior varies by client and by server IP. Recent yt-dlp reports also show `mweb` can still return `LOGIN_REQUIRED` on some datacenter IPs even when a PO-token provider is installed. urlyt-dlp PO Token Guidehttps://github.com/yt-dlp/yt-dlp/wiki/Po-Token-Guide
+
+The Codespaces container installs:
 
 - Chromium
 - FFmpeg
 - `yt-dlp-getpot-wpc`
+- the current yt-dlp nightly containing recent YouTube client fixes
 
-The provider automatically opens Chromium to mint the PO tokens required by yt-dlp. urlWebPoClient PO Token Providerhttps://github.com/coletdjnz/yt-dlp-getpot-wpc
+**For an existing Codespace:** rebuild the container after pulling these changes using **Command Palette → Codespaces: Rebuild Container**.
 
-**After pulling these changes into an existing Codespace, rebuild the container** so the new `.devcontainer/devcontainer.json` is applied. In VS Code/Codespaces, use **Command Palette → Codespaces: Rebuild Container**.
-
-Then install/update Python dependencies:
+Then run:
 
 ```bash
 python -m pip install -r requirements.txt
+python bot.py
 ```
 
-You normally do **not** need `YOUTUBE_BROWSER=chrome` or a cookies file with this setup. The default Chromium path is:
+At startup Eli-Mini prints the installed yt-dlp version, WebPoClient version, and Chromium path. The WebPoClient README says a successful install appears as a PO Token provider in yt-dlp debug output and requires Chrome/Chromium. urlWebPoClient PO Token Providerhttps://github.com/coletdjnz/yt-dlp-getpot-wpc
+
+### 6. If YouTube still says "Sign in to confirm you're not a bot"
+
+A GitHub Codespaces server IP can still be challenged by YouTube. In that case, use a YouTube `cookies.txt` exported from a browser session and provide it to the Codespace as `YOUTUBE_COOKIES_B64`.
+
+Do **not** commit the cookies file or put it in the repository.
+
+The bot already supports:
 
 ```text
-YOUTUBE_BROWSER_PATH=/usr/bin/chromium
+YOUTUBE_COOKIES_FILE=/absolute/path/to/cookies.txt
 ```
 
-If Chromium is installed somewhere else, set `YOUTUBE_BROWSER_PATH` to its executable path.
+or:
 
-### 6. Run Eli-Mini
+```text
+YOUTUBE_COOKIES_B64=<base64-encoded-cookies.txt>
+```
+
+On Windows PowerShell, after exporting `cookies.txt`, you can base64-encode it with:
+
+```powershell
+[Convert]::ToBase64String([IO.File]::ReadAllBytes("cookies.txt"))
+```
+
+Paste the resulting value into a Codespaces secret/environment variable named `YOUTUBE_COOKIES_B64`.
+
+### 7. Run Eli-Mini
 
 ```bash
 python bot.py
 ```
 
-### 7. Play a YouTube video
+### 8. Play a YouTube video
 
 Join a voice channel, then run:
 
@@ -114,7 +141,7 @@ Join a voice channel, then run:
 /play url:https://www.youtube.com/watch?v=...
 ```
 
-Eli-Mini will join your channel and start playing the video's audio. Running `/play` again stops the current track and starts the new one.
+Eli-Mini joins your channel and starts playing the video's audio. Running `/play` again stops the current track and starts the new one.
 
 Use:
 
@@ -126,4 +153,4 @@ to stop playback and disconnect.
 
 ## Notes
 
-The bot uses yt-dlp to extract the playable media URL rather than downloading the video to disk. yt-dlp's YouTube support can change as YouTube changes its delivery requirements, so some videos or links may occasionally fail to extract.
+The bot uses yt-dlp to extract a playable media URL rather than downloading the video to disk. YouTube changes its delivery and anti-bot systems frequently, so server-side YouTube playback can occasionally break and require a new yt-dlp/provider update.
