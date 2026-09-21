@@ -1,5 +1,8 @@
 import asyncio
+import base64
 import os
+import re
+import tempfile
 from urllib.parse import urlparse
 
 import discord
@@ -20,6 +23,7 @@ FFMPEG_PATH = os.getenv("FFMPEG_PATH", "ffmpeg")
 # "chrome" or "firefox") when running Eli-Mini on the same machine as the
 # browser that owns the YouTube session.
 YOUTUBE_COOKIES_FILE = os.getenv("YOUTUBE_COOKIES_FILE")
+YOUTUBE_COOKIES_B64 = os.getenv("YOUTUBE_COOKIES_B64")
 YOUTUBE_BROWSER = os.getenv("YOUTUBE_BROWSER")
 
 YTDL_OPTIONS = {
@@ -59,15 +63,60 @@ def is_youtube_url(url: str) -> bool:
     return host in {"youtube.com", "www.youtube.com", "youtu.be", "music.youtube.com"}
 
 
+def _clean_error(message: str) -> str:
+    """Remove ANSI terminal color codes before showing an error in Discord."""
+    return re.sub(r"\\x1b\\[[0-9;]*m", "", message)
+
+
 def extract_audio(url: str) -> tuple[str, str]:
     """Return (title, direct_stream_url) for a YouTube URL."""
-    with yt_dlp.YoutubeDL(YTDL_OPTIONS) as ydl:
-        info = ydl.extract_info(url, download=False)
+    options = dict(YTDL_OPTIONS)
+    temporary_cookie_file: str | None = None
 
-    if not info or not info.get("url"):
-        raise RuntimeError("yt-dlp could not find an audio stream for that URL.")
+    try:
+        if YOUTUBE_COOKIES_FILE:
+            options["cookiefile"] = YOUTUBE_COOKIES_FILE
+        elif YOUTUBE_COOKIES_B64:
+            try:
+                cookie_bytes = base64.b64decode(YOUTUBE_COOKIES_B64)
+            except Exception as exc:
+                raise RuntimeError("YOUTUBE_COOKIES_B64 is not valid base64.") from exc
 
-    return info.get("title", "YouTube audio"), info["url"]
+            with tempfile.NamedTemporaryFile(
+                mode="wb", suffix=".txt", delete=False
+            ) as cookie_file:
+                cookie_file.write(cookie_bytes)
+                temporary_cookie_file = cookie_file.name
+
+            options["cookiefile"] = temporary_cookie_file
+        elif YOUTUBE_BROWSER:
+            options["cookiesfrombrowser"] = (YOUTUBE_BROWSER, None, None, None)
+
+        with yt_dlp.YoutubeDL(options) as ydl:
+            info = ydl.extract_info(url, download=False)
+
+        if not info or not info.get("url"):
+            raise RuntimeError("yt-dlp could not find an audio stream for that URL.")
+
+        return info.get("title", "YouTube audio"), info["url"]
+    except yt_dlp.utils.DownloadError as exc:
+        message = _clean_error(str(exc))
+        if "Sign in to confirm" in message or "not a bot" in message:
+            raise RuntimeError(
+                "YouTube blocked this request as a bot. "
+                "Because Eli-Mini is running in Codespaces, Chrome cookies "
+                "are not available there. Set YOUTUBE_COOKIES_FILE to a "
+                "Netscape-format cookies.txt file, or set YOUTUBE_COOKIES_B64 "
+                "to a base64-encoded cookies.txt file."
+            ) from exc
+        raise RuntimeError(message) from exc
+    finally:
+        if temporary_cookie_file:
+            try:
+                os.remove(temporary_cookie_file)
+            except OSError:
+                pass
+
 
 
 async def get_or_create_voice_client(
@@ -145,7 +194,7 @@ async def play(interaction: discord.Interaction, url: str) -> None:
         await interaction.followup.send(
             "I don't have permission to join or speak in that voice channel."
         )
-    except (discord.ClientException, RuntimeError, yt_dlp.utils.DownloadError) as exc:
+    except (discord.ClientException, RuntimeError) as exc:
         await interaction.followup.send(f"❌ I couldn't play that link: {exc}")
 
 
