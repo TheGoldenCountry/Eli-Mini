@@ -72,13 +72,35 @@ FFMPEG_PATH=ffmpeg
 
 Do not commit `.env`.
 
-### 5. Run Eli-Mini
+### 5. Configure YouTube authentication
+
+YouTube can sometimes block yt-dlp with a message such as **"Sign in to confirm you're not a bot."** This can happen even for public videos. Current yt-dlp guidance supports supplying a browser session via cookies. urlyt-dlp's cookie FAQhttps://github.com/yt-dlp/yt-dlp/wiki/FAQ
+
+For a bot running on the same computer as your browser, you can set:
+
+```text
+YOUTUBE_BROWSER=chrome
+```
+
+Replace `chrome` with the browser containing the YouTube session.
+
+For a bot running on a VPS/server, export a YouTube cookies file in Netscape format and set:
+
+```text
+YOUTUBE_COOKIES_FILE=/absolute/path/to/cookies.txt
+```
+
+**Never commit `cookies.txt` to GitHub or share it.** Treat it like an authentication credential. The repository's `.gitignore` already ignores `.env`, but you should also keep your cookies file outside the repository.
+
+Cookies may stop working as YouTube rotates sessions, so this is an operational workaround rather than a permanent guarantee.
+
+### 6. Run Eli-Mini
 
 ```bash
 python bot.py
 ```
 
-### 6. Play a YouTube video
+### 7. Play a YouTube video
 
 Join a voice channel, then run:
 
