@@ -2,13 +2,13 @@
 
 A simple Discord bot built with Python and [discord.py](https://discordpy.readthedocs.io/).
 
-## What it does
-
-The starter bot currently provides three slash commands:
+## Commands
 
 - `/ping` — checks that the bot is online.
 - `/hello` — greets a user.
 - `/about` — shows basic bot information.
+- `/play <youtube-url>` — joins your current voice channel and plays the YouTube video's audio.
+- `/leave` — stops playback and leaves the voice channel.
 
 ## Setup
 
@@ -21,9 +21,11 @@ In the Discord Developer Portal:
 3. Copy the bot token.
 4. Keep the token private. Never commit it to Git.
 
-### 2. Install dependencies
+The bot needs permission to **View Channel**, **Connect**, and **Speak** in the voice channel you want to use. The invite should include the **bot** and **applications.commands** scopes.
 
-Create a fresh virtual environment, then run:
+### 2. Install Python dependencies
+
+Create a fresh virtual environment:
 
 ```bash
 python -m venv .venv
@@ -47,19 +49,28 @@ Then:
 pip install -r requirements.txt
 ```
 
-### 3. Configure the token
+### 3. Install FFmpeg
+
+FFmpeg must be installed separately and available on your system PATH because discord.py uses it to turn the extracted audio stream into Discord audio.
+
+Verify it with:
+
+```bash
+ffmpeg -version
+```
+
+If FFmpeg is installed somewhere that is not on PATH, set `FFMPEG_PATH` in `.env` to the full path to the executable.
+
+### 4. Configure the token
 
 Copy `.env.example` to `.env`:
 
 ```text
 DISCORD_TOKEN=your-real-token
+FFMPEG_PATH=ffmpeg
 ```
 
 Do not commit `.env`.
-
-### 4. Invite the bot
-
-Generate an OAuth2 invite URL for your application with the **bot** and **applications.commands** scopes. Give it only the permissions it actually needs.
 
 ### 5. Run Eli-Mini
 
@@ -67,8 +78,24 @@ Generate an OAuth2 invite URL for your application with the **bot** and **applic
 python bot.py
 ```
 
-When it connects, you should see a login message. Then use `/ping`, `/hello`, or `/about` in a server where the bot is installed.
+### 6. Play a YouTube video
 
-## Next steps
+Join a voice channel, then run:
 
-This is intentionally small. The next stage can move commands into a `cogs/` package and put the actual Eli-Mini functionality behind one or more commands.
+```text
+/play url:https://www.youtube.com/watch?v=...
+```
+
+Eli-Mini will join your channel and start playing the video's audio. Running `/play` again stops the current track and starts the new one.
+
+Use:
+
+```text
+/leave
+```
+
+to stop playback and disconnect.
+
+## Notes
+
+The bot uses yt-dlp to extract the playable media URL rather than downloading the video to disk. yt-dlp's YouTube support can change as YouTube changes its delivery requirements, so some videos or links may occasionally fail to extract.
