@@ -72,27 +72,33 @@ FFMPEG_PATH=ffmpeg
 
 Do not commit `.env`.
 
-### 5. Configure YouTube authentication
+### 5. Configure YouTube playback
 
-YouTube may block yt-dlp with **"Sign in to confirm you're not a bot."** yt-dlp documents cookies as a workaround for these cases. urlyt-dlp's cookie FAQhttps://github.com/yt-dlp/yt-dlp/wiki/FAQ
+YouTube can return **"Sign in to confirm you're not a bot"** when yt-dlp requests playback. yt-dlp's current documentation recommends a PO Token Provider for affected clients, and Eli-Mini now includes the WebPoClient provider. urlyt-dlp PO Token Guidehttps://github.com/yt-dlp/yt-dlp/wiki/Po-Token-Guide
 
-**Important for GitHub Codespaces:** `YOUTUBE_BROWSER=chrome` only works when Chrome is actually installed in the same environment and has the relevant cookies. A normal Codespace does not have your Windows/Chrome profile, so point Eli-Mini at an exported cookies file instead.
+The repository now includes a Codespaces configuration that installs:
 
-For a Codespace/server, set:
+- Chromium
+- FFmpeg
+- `yt-dlp-getpot-wpc`
 
-```text
-YOUTUBE_COOKIES_FILE=/absolute/path/to/cookies.txt
+The provider automatically opens Chromium to mint the PO tokens required by yt-dlp. urlWebPoClient PO Token Providerhttps://github.com/coletdjnz/yt-dlp-getpot-wpc
+
+**After pulling these changes into an existing Codespace, rebuild the container** so the new `.devcontainer/devcontainer.json` is applied. In VS Code/Codespaces, use **Command Palette → Codespaces: Rebuild Container**.
+
+Then install/update Python dependencies:
+
+```bash
+python -m pip install -r requirements.txt
 ```
 
-You can also keep the cookie file out of the working tree and load it through a Codespaces secret using a base64-encoded value:
+You normally do **not** need `YOUTUBE_BROWSER=chrome` or a cookies file with this setup. The default Chromium path is:
 
 ```text
-YOUTUBE_COOKIES_B64=<base64-encoded-cookies.txt>
+YOUTUBE_BROWSER_PATH=/usr/bin/chromium
 ```
 
-The cookies file must be in Mozilla/Netscape format. yt-dlp notes that YouTube rotates cookies, so exported cookies may need to be refreshed periodically. urlyt-dlp's YouTube extractor documentationhttps://github.com/yt-dlp/yt-dlp/wiki/Extractors
-
-**Never commit or publicly share YouTube cookies.** They are authentication credentials. Keep `cookies.txt` outside the repository, or store its base64 value as a private Codespaces secret.
+If Chromium is installed somewhere else, set `YOUTUBE_BROWSER_PATH` to its executable path.
 
 ### 6. Run Eli-Mini
 
