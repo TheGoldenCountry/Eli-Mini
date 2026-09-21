@@ -24,6 +24,7 @@ YOUTUBE_COOKIES_FILE = os.getenv("YOUTUBE_COOKIES_FILE")
 YOUTUBE_COOKIES_B64 = os.getenv("YOUTUBE_COOKIES_B64")
 YOUTUBE_BROWSER = os.getenv("YOUTUBE_BROWSER")
 YOUTUBE_BROWSER_PATH = os.getenv("YOUTUBE_BROWSER_PATH", "/usr/bin/chromium")
+YOUTUBE_PROXY = os.getenv("YOUTUBE_PROXY")
 
 # YouTube currently has a known failure where authenticated sessions select
 # tv_downgraded and return "The page needs to be reloaded". The upstream
@@ -66,6 +67,7 @@ async def on_ready() -> None:
         print(f"yt-dlp: {yt_dlp.version.__version__}")
         print(f"yt-dlp-getpot-wpc: {provider_version or 'not installed'}")
         print(f"Chromium: {chromium}")
+        print(f"YouTube proxy: {'configured' if YOUTUBE_PROXY else 'not configured'}")
 
 
 def _package_version(name: str) -> str | None:
@@ -86,6 +88,9 @@ def _clean_error(message: str) -> str:
 
 def _build_ytdl_options(player_clients: list[str], use_cookies: bool) -> dict:
     options = copy.deepcopy(BASE_YTDL_OPTIONS)
+    if YOUTUBE_PROXY:
+        options["proxy"] = YOUTUBE_PROXY
+
     options["extractor_args"] = {
         "youtube": {
             "player_client": player_clients,
@@ -164,12 +169,14 @@ def extract_audio(url: str) -> tuple[str, str]:
     if "Sign in to confirm" in last_error or "not a bot" in last_error:
         if YOUTUBE_COOKIES_FILE or YOUTUBE_COOKIES_B64 or YOUTUBE_BROWSER:
             raise RuntimeError(
-                "YouTube is still rejecting the Codespaces IP as a bot. "
-                "The configured browser/cookie session did not bypass the challenge."
+                "YouTube is still rejecting the extraction IP as a bot. "
+                "The configured cookies/session did not bypass the challenge. "
+                "If using YOUTUBE_PROXY, make sure the browser session/cookies match that proxy IP."
             )
         raise RuntimeError(
-            "YouTube is rejecting the Codespaces server IP as a bot. "
-            "Add YOUTUBE_COOKIES_B64 from a YouTube session."
+            "YouTube is rejecting the extraction IP as a bot. "
+            "Set YOUTUBE_PROXY to a proxy/network where YouTube access works, "
+            "or provide a matching YouTube cookie session."
         )
 
     if "The page needs to be reloaded" in last_error:
