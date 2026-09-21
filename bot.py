@@ -25,13 +25,21 @@ FFMPEG_PATH = os.getenv("FFMPEG_PATH", "ffmpeg")
 YOUTUBE_COOKIES_FILE = os.getenv("YOUTUBE_COOKIES_FILE")
 YOUTUBE_COOKIES_B64 = os.getenv("YOUTUBE_COOKIES_B64")
 YOUTUBE_BROWSER = os.getenv("YOUTUBE_BROWSER")
+YOUTUBE_BROWSER_PATH = os.getenv("YOUTUBE_BROWSER_PATH", "/usr/bin/chromium")
 
 YTDL_OPTIONS = {
     "format": "bestaudio/best",
     "noplaylist": True,
     "quiet": True,
     "no_warnings": True,
+    # Use the mweb client recommended for PO-token based YouTube playback.
+    "extractor_args": {
+        "youtube": {
+            "player_client": ["mweb"],
+        },
+    },
 }
+
 
 class EliMini(commands.Bot):
     def __init__(self) -> None:
@@ -86,6 +94,10 @@ def extract_audio(url: str) -> tuple[str, str]:
         elif YOUTUBE_BROWSER:
             options["cookiesfrombrowser"] = (YOUTUBE_BROWSER, None, None, None)
 
+        options.setdefault("extractor_args", {}).setdefault("youtubepot-wpc", {})[
+            "browser_path"
+        ] = YOUTUBE_BROWSER_PATH
+
         with yt_dlp.YoutubeDL(options) as ydl:
             info = ydl.extract_info(url, download=False)
 
@@ -98,10 +110,9 @@ def extract_audio(url: str) -> tuple[str, str]:
         if "Sign in to confirm" in message or "not a bot" in message:
             raise RuntimeError(
                 "YouTube blocked this request as a bot. "
-                "Because Eli-Mini is running in Codespaces, Chrome cookies "
-                "are not available there. Set YOUTUBE_COOKIES_FILE to a "
-                "Netscape-format cookies.txt file, or set YOUTUBE_COOKIES_B64 "
-                "to a base64-encoded cookies.txt file."
+                "Eli-Mini is configured to use the YouTube PO-token provider. "
+                "If this continues, make sure Chromium is installed and "
+                "YOUTUBE_BROWSER_PATH points to the Chromium executable."
             ) from exc
         raise RuntimeError(message) from exc
     finally:
