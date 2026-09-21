@@ -25,14 +25,15 @@ YOUTUBE_COOKIES_B64 = os.getenv("YOUTUBE_COOKIES_B64")
 YOUTUBE_BROWSER = os.getenv("YOUTUBE_BROWSER")
 YOUTUBE_BROWSER_PATH = os.getenv("YOUTUBE_BROWSER_PATH", "/usr/bin/chromium")
 
-# Do not use yt-dlp's implicit default client when cookies are supplied.
-# YouTube currently has a known failure where logged-in default selection
-# reaches tv_downgraded and returns "The page needs to be reloaded".
+# When authenticated cookies are supplied, yt-dlp can select the
+# tv_downgraded client and hit YouTube's current "The page needs to be
+# reloaded" failure. The upstream workaround is to provide default and
+# web_embedded together so yt-dlp can fall through to web_embedded.
 YOUTUBE_CLIENT_PROFILES = (
+    ("default+web_embedded", ["default", "web_embedded"]),
     ("web_embedded", ["web_embedded"]),
     ("web_safari", ["web_safari"]),
     ("mweb", ["mweb"]),
-    ("default", ["default"]),
 )
 
 
