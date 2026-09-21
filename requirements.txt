@@ -1,3 +1,4 @@
 discord.py[voice]>=2.7,<3
 python-dotenv>=1,<2
-yt-dlp>=2025.1.0
+yt-dlp>=2025.09.26
+yt-dlp-getpot-wpc>=1.1.2,<2
