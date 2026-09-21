@@ -231,7 +231,7 @@ async def get_or_create_voice_client(
     member = interaction.user
     voice_state = getattr(member, "voice", None)
     if voice_state is None or voice_state.channel is None:
-        raise RuntimeError("Join a voice channel first, then run /play.")
+        raise RuntimeError("Join a voice channel first, then run /join or /play.")
 
     target_channel = voice_state.channel
     voice_client = discord.utils.get(bot.voice_clients, guild=interaction.guild)
@@ -261,6 +261,18 @@ async def about(interaction: discord.Interaction) -> None:
     await interaction.response.send_message(
         "I'm Eli-Mini, a simple Discord bot built with Python and discord.py."
     )
+
+
+@bot.tree.command(name="join", description="Join the voice channel you are currently in.")
+async def join(interaction: discord.Interaction) -> None:
+    try:
+        voice_client = await get_or_create_voice_client(interaction)
+        channel_name = voice_client.channel.name if voice_client.channel is not None else "your voice channel"
+        await interaction.response.send_message("Joined **" + channel_name + "**.")
+    except discord.Forbidden:
+        await interaction.response.send_message("I do not have permission to join or speak in that voice channel.")
+    except (discord.ClientException, RuntimeError) as exc:
+        await interaction.response.send_message("Could not join the voice channel: " + str(exc))
 
 
 @bot.tree.command(name="play", description="Join your voice channel and play a YouTube link.")
