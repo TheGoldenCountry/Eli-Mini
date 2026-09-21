@@ -1,7 +1,10 @@
 import asyncio
 import base64
+import copy
+import importlib.metadata
 import os
 import re
+import shutil
 import tempfile
 from urllib.parse import urlparse
 
@@ -17,27 +20,28 @@ load_dotenv()
 TOKEN = os.getenv("DISCORD_TOKEN")
 FFMPEG_PATH = os.getenv("FFMPEG_PATH", "ffmpeg")
 
-# YouTube may require an authenticated browser session for yt-dlp requests.
-# Never commit the cookies file to Git. Set YOUTUBE_COOKIES_FILE to a local
-# Netscape-format cookies.txt file, or set YOUTUBE_BROWSER (for example,
-# "chrome" or "firefox") when running Eli-Mini on the same machine as the
-# browser that owns the YouTube session.
+# YouTube authentication is optional. Cookies are useful when YouTube blocks
+# datacenter/server IPs with a bot-check.
 YOUTUBE_COOKIES_FILE = os.getenv("YOUTUBE_COOKIES_FILE")
 YOUTUBE_COOKIES_B64 = os.getenv("YOUTUBE_COOKIES_B64")
 YOUTUBE_BROWSER = os.getenv("YOUTUBE_BROWSER")
 YOUTUBE_BROWSER_PATH = os.getenv("YOUTUBE_BROWSER_PATH", "/usr/bin/chromium")
 
-YTDL_OPTIONS = {
+# Try clients that can work without a PO token first, then use mweb with the
+# WebPoClient provider. YouTube changes which clients work over time, so the
+# fallback chain is intentional.
+YOUTUBE_CLIENT_PROFILES = (
+    ("web_embedded", ["web_embedded"]),
+    ("web_safari", ["web_safari"]),
+    ("mweb", ["mweb"]),
+    ("default", None),
+)
+
+BASE_YTDL_OPTIONS = {
     "format": "bestaudio/best",
     "noplaylist": True,
     "quiet": True,
     "no_warnings": True,
-    # Use the mweb client recommended for PO-token based YouTube playback.
-    "extractor_args": {
-        "youtube": {
-            "player_client": ["mweb"],
-        },
-    },
 }
 
 
@@ -47,7 +51,6 @@ class EliMini(commands.Bot):
         super().__init__(command_prefix="!", intents=intents)
 
     async def setup_hook(self) -> None:
-        # Register slash commands with Discord.
         await self.tree.sync()
 
 
@@ -57,7 +60,19 @@ bot = EliMini()
 @bot.event
 async def on_ready() -> None:
     if bot.user is not None:
+        provider_version = _package_version("yt-dlp-getpot-wpc")
+        chromium = shutil.which("chromium") or YOUTUBE_BROWSER_PATH
         print(f"Logged in as {bot.user} (ID: {bot.user.id})")
+        print(f"yt-dlp: {yt_dlp.version.__version__}")
+        print(f"yt-dlp-getpot-wpc: {provider_version or 'not installed'}")
+        print(f"Chromium: {chromium}")
+
+
+def _package_version(name: str) -> str | None:
+    try:
+        return importlib.metadata.version(name)
+    except importlib.metadata.PackageNotFoundError:
+        return None
 
 
 def is_youtube_url(url: str) -> bool:
@@ -70,58 +85,102 @@ def _clean_error(message: str) -> str:
     return re.sub(r"\x1b\[[0-9;]*m", "", message)
 
 
+def _build_ytdl_options(player_clients: list[str] | None) -> dict:
+    options = copy.deepcopy(BASE_YTDL_OPTIONS)
+
+    if player_clients:
+        options["extractor_args"] = {
+            "youtube": {
+                "player_client": player_clients,
+            }
+        }
+    else:
+        options["extractor_args"] = {
+            "youtube": {
+                "player_client": ["default"],
+            }
+        }
+
+    options["extractor_args"]["youtubepot-wpc"] = {
+        "browser_path": YOUTUBE_BROWSER_PATH,
+    }
+
+    if YOUTUBE_COOKIES_FILE:
+        options["cookiefile"] = YOUTUBE_COOKIES_FILE
+    elif YOUTUBE_COOKIES_B64:
+        try:
+            cookie_bytes = base64.b64decode(YOUTUBE_COOKIES_B64, validate=True)
+        except Exception as exc:
+            raise RuntimeError("YOUTUBE_COOKIES_B64 is not valid base64.") from exc
+
+        cookie_file = tempfile.NamedTemporaryFile(
+            mode="wb", suffix=".txt", delete=False
+        )
+        try:
+            cookie_file.write(cookie_bytes)
+            cookie_file.close()
+        except Exception:
+            cookie_file.close()
+            os.remove(cookie_file.name)
+            raise
+
+        options["cookiefile"] = cookie_file.name
+
+    elif YOUTUBE_BROWSER:
+        options["cookiesfrombrowser"] = (YOUTUBE_BROWSER, None, None, None)
+
+    return options
+
+
 def extract_audio(url: str) -> tuple[str, str]:
     """Return (title, direct_stream_url) for a YouTube URL."""
-    options = dict(YTDL_OPTIONS)
-    temporary_cookie_file: str | None = None
+    last_error = "yt-dlp could not find a playable audio stream."
 
-    try:
-        if YOUTUBE_COOKIES_FILE:
-            options["cookiefile"] = YOUTUBE_COOKIES_FILE
-        elif YOUTUBE_COOKIES_B64:
-            try:
-                cookie_bytes = base64.b64decode(YOUTUBE_COOKIES_B64)
-            except Exception as exc:
-                raise RuntimeError("YOUTUBE_COOKIES_B64 is not valid base64.") from exc
+    for profile_name, player_clients in YOUTUBE_CLIENT_PROFILES:
+        temporary_cookie_file: str | None = None
+        try:
+            options = _build_ytdl_options(player_clients)
+            cookie_path = options.get("cookiefile")
+            if (
+                YOUTUBE_COOKIES_B64
+                and cookie_path
+                and cookie_path != YOUTUBE_COOKIES_FILE
+            ):
+                temporary_cookie_file = cookie_path
 
-            with tempfile.NamedTemporaryFile(
-                mode="wb", suffix=".txt", delete=False
-            ) as cookie_file:
-                cookie_file.write(cookie_bytes)
-                temporary_cookie_file = cookie_file.name
+            with yt_dlp.YoutubeDL(options) as ydl:
+                info = ydl.extract_info(url, download=False)
 
-            options["cookiefile"] = temporary_cookie_file
-        elif YOUTUBE_BROWSER:
-            options["cookiesfrombrowser"] = (YOUTUBE_BROWSER, None, None, None)
+            if info and info.get("url"):
+                return info.get("title", "YouTube audio"), info["url"]
 
-        options.setdefault("extractor_args", {}).setdefault("youtubepot-wpc", {})[
-            "browser_path"
-        ] = YOUTUBE_BROWSER_PATH
+            last_error = f"{profile_name}: yt-dlp returned no playable stream."
 
-        with yt_dlp.YoutubeDL(options) as ydl:
-            info = ydl.extract_info(url, download=False)
+        except yt_dlp.utils.DownloadError as exc:
+            last_error = _clean_error(str(exc))
+            continue
+        finally:
+            if temporary_cookie_file:
+                try:
+                    os.remove(temporary_cookie_file)
+                except OSError:
+                    pass
 
-        if not info or not info.get("url"):
-            raise RuntimeError("yt-dlp could not find an audio stream for that URL.")
-
-        return info.get("title", "YouTube audio"), info["url"]
-    except yt_dlp.utils.DownloadError as exc:
-        message = _clean_error(str(exc))
-        if "Sign in to confirm" in message or "not a bot" in message:
+    if "Sign in to confirm" in last_error or "not a bot" in last_error:
+        if YOUTUBE_COOKIES_FILE or YOUTUBE_COOKIES_B64 or YOUTUBE_BROWSER:
             raise RuntimeError(
-                "YouTube blocked this request as a bot. "
-                "Eli-Mini is configured to use the YouTube PO-token provider. "
-                "If this continues, make sure Chromium is installed and "
-                "YOUTUBE_BROWSER_PATH points to the Chromium executable."
-            ) from exc
-        raise RuntimeError(message) from exc
-    finally:
-        if temporary_cookie_file:
-            try:
-                os.remove(temporary_cookie_file)
-            except OSError:
-                pass
+                "YouTube is still rejecting the Codespaces IP as a bot. "
+                "The configured browser/cookie session did not bypass the "
+                "challenge. Try refreshing the YouTube cookies."
+            )
+        raise RuntimeError(
+            "YouTube is rejecting the Codespaces server IP as a bot. "
+            "Eli-Mini tried web_embedded, web_safari, mweb with the PO-token "
+            "provider, and the default client. For reliable server-side "
+            "playback, add YOUTUBE_COOKIES_B64 from a YouTube session."
+        )
 
+    raise RuntimeError(last_error)
 
 
 async def get_or_create_voice_client(
