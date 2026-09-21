@@ -18,6 +18,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 TOKEN = os.getenv("DISCORD_TOKEN")
+DISCORD_GUILD_ID = os.getenv("DISCORD_GUILD_ID")
 FFMPEG_PATH = os.getenv("FFMPEG_PATH", "ffmpeg")
 
 YOUTUBE_COOKIES_FILE = os.getenv("YOUTUBE_COOKIES_FILE")
@@ -59,7 +60,14 @@ class EliMini(commands.Bot):
         super().__init__(command_prefix="!", intents=intents)
 
     async def setup_hook(self) -> None:
-        await self.tree.sync()
+        if DISCORD_GUILD_ID:
+            guild = discord.Object(id=int(DISCORD_GUILD_ID))
+            self.tree.copy_global_to(guild=guild)
+            synced = await self.tree.sync(guild=guild)
+            print(f"Synced {len(synced)} commands to guild {DISCORD_GUILD_ID}")
+        else:
+            synced = await self.tree.sync()
+            print(f"Synced {len(synced)} global commands")
 
 
 bot = EliMini()
