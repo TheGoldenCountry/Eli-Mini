@@ -14,12 +14,25 @@ load_dotenv()
 TOKEN = os.getenv("DISCORD_TOKEN")
 FFMPEG_PATH = os.getenv("FFMPEG_PATH", "ffmpeg")
 
+# YouTube may require an authenticated browser session for yt-dlp requests.
+# Never commit the cookies file to Git. Set YOUTUBE_COOKIES_FILE to a local
+# Netscape-format cookies.txt file, or set YOUTUBE_BROWSER (for example,
+# "chrome" or "firefox") when running Eli-Mini on the same machine as the
+# browser that owns the YouTube session.
+YOUTUBE_COOKIES_FILE = os.getenv("YOUTUBE_COOKIES_FILE")
+YOUTUBE_BROWSER = os.getenv("YOUTUBE_BROWSER")
+
 YTDL_OPTIONS = {
     "format": "bestaudio/best",
     "noplaylist": True,
     "quiet": True,
     "no_warnings": True,
 }
+
+if YOUTUBE_COOKIES_FILE:
+    YTDL_OPTIONS["cookiefile"] = YOUTUBE_COOKIES_FILE
+elif YOUTUBE_BROWSER:
+    YTDL_OPTIONS["cookiesfrombrowser"] = (YOUTUBE_BROWSER, None, None, None)
 
 
 class EliMini(commands.Bot):
