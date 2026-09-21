@@ -33,12 +33,6 @@ YTDL_OPTIONS = {
     "no_warnings": True,
 }
 
-if YOUTUBE_COOKIES_FILE:
-    YTDL_OPTIONS["cookiefile"] = YOUTUBE_COOKIES_FILE
-elif YOUTUBE_BROWSER:
-    YTDL_OPTIONS["cookiesfrombrowser"] = (YOUTUBE_BROWSER, None, None, None)
-
-
 class EliMini(commands.Bot):
     def __init__(self) -> None:
         intents = discord.Intents.default()
@@ -65,7 +59,7 @@ def is_youtube_url(url: str) -> bool:
 
 def _clean_error(message: str) -> str:
     """Remove ANSI terminal color codes before showing an error in Discord."""
-    return re.sub(r"\\x1b\\[[0-9;]*m", "", message)
+    return re.sub(r"\x1b\[[0-9;]*m", "", message)
 
 
 def extract_audio(url: str) -> tuple[str, str]:
