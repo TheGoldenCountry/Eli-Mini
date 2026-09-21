@@ -6,7 +6,7 @@ import os
 import re
 import shutil
 import tempfile
-from urllib.parse import urlparse
+from urllib.parse import quote, urlparse
 
 import discord
 import yt_dlp
@@ -25,6 +25,13 @@ YOUTUBE_COOKIES_B64 = os.getenv("YOUTUBE_COOKIES_B64")
 YOUTUBE_BROWSER = os.getenv("YOUTUBE_BROWSER")
 YOUTUBE_BROWSER_PATH = os.getenv("YOUTUBE_BROWSER_PATH", "/usr/bin/chromium")
 YOUTUBE_PROXY = os.getenv("YOUTUBE_PROXY")
+# Optional Webshare YouTube Proxy settings. The dedicated YouTube proxy plan
+# supplies an endpoint, username, password, and port.
+YOUTUBE_PROXY_ENDPOINT = os.getenv("YOUTUBE_PROXY_ENDPOINT")
+YOUTUBE_PROXY_PORT = os.getenv("YOUTUBE_PROXY_PORT", "30000")
+YOUTUBE_PROXY_USERNAME = os.getenv("YOUTUBE_PROXY_USERNAME")
+YOUTUBE_PROXY_PASSWORD = os.getenv("YOUTUBE_PROXY_PASSWORD")
+YOUTUBE_PROXY_SESSION = os.getenv("YOUTUBE_PROXY_SESSION", "elimini")
 
 # YouTube currently has a known failure where authenticated sessions select
 # tv_downgraded and return "The page needs to be reloaded". The upstream
@@ -67,7 +74,10 @@ async def on_ready() -> None:
         print(f"yt-dlp: {yt_dlp.version.__version__}")
         print(f"yt-dlp-getpot-wpc: {provider_version or 'not installed'}")
         print(f"Chromium: {chromium}")
-        print(f"YouTube proxy: {'configured' if YOUTUBE_PROXY else 'not configured'}")
+        print(
+            "YouTube proxy: "
+            f"{'configured' if _get_youtube_proxy() else 'not configured'}"
+        )
 
 
 def _package_version(name: str) -> str | None:
@@ -86,10 +96,33 @@ def _clean_error(message: str) -> str:
     return re.sub(r"\x1b\[[0-9;]*m", "", message)
 
 
+def _get_youtube_proxy() -> str | None:
+    if YOUTUBE_PROXY:
+        return YOUTUBE_PROXY
+
+    if (
+        YOUTUBE_PROXY_ENDPOINT
+        and YOUTUBE_PROXY_USERNAME
+        and YOUTUBE_PROXY_PASSWORD
+    ):
+        username = YOUTUBE_PROXY_USERNAME
+        if YOUTUBE_PROXY_SESSION:
+            username = f"{username}-{YOUTUBE_PROXY_SESSION}"
+
+        return (
+            f"http://{quote(username, safe="")}:"
+            f"{quote(YOUTUBE_PROXY_PASSWORD, safe="")}@"
+            f"{YOUTUBE_PROXY_ENDPOINT}:{YOUTUBE_PROXY_PORT}"
+        )
+
+    return None
+
+
 def _build_ytdl_options(player_clients: list[str], use_cookies: bool) -> dict:
     options = copy.deepcopy(BASE_YTDL_OPTIONS)
-    if YOUTUBE_PROXY:
-        options["proxy"] = YOUTUBE_PROXY
+    youtube_proxy = _get_youtube_proxy()
+    if youtube_proxy:
+        options["proxy"] = youtube_proxy
 
     options["extractor_args"] = {
         "youtube": {
