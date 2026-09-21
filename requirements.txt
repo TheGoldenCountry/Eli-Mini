@@ -1,4 +1,4 @@
 discord.py[voice]>=2.7,<3
 python-dotenv>=1,<2
-yt-dlp==2026.9.16.232951.dev0
+yt-dlp[default]==2026.9.16.232951.dev0
 yt-dlp-getpot-wpc>=1.1.2,<2
