@@ -92,7 +92,7 @@ The Codespaces container installs:
 - `yt-dlp-getpot-wpc`
 - yt-dlp
 
-**For an existing Codespace:** rebuild the container after pulling these changes using **Command Palette → Codespaces: Rebuild Container**.
+**For an existing Codespace:** rebuild the container after pulling these changes using **Command Palette → Codespaces: Rebuild Container**. This project deliberately uses Python 3.12 because the current WebPoClient dependency chain has a known import failure under Python 3.14. After rebuilding, verify that `python --version` reports Python 3.12.x and that `which python` points into `.venv/bin/python`. urlWebPoClient Python 3.14 import issuehttps://github.com/coletdjnz/yt-dlp-getpot-wpc/issues/7
 
 ### 6. Verify the PO-token provider
 
