@@ -74,25 +74,25 @@ Do not commit `.env`.
 
 ### 5. Configure YouTube authentication
 
-YouTube can sometimes block yt-dlp with a message such as **"Sign in to confirm you're not a bot."** This can happen even for public videos. Current yt-dlp guidance supports supplying a browser session via cookies. urlyt-dlp's cookie FAQhttps://github.com/yt-dlp/yt-dlp/wiki/FAQ
+YouTube may block yt-dlp with **"Sign in to confirm you're not a bot."** yt-dlp documents cookies as a workaround for these cases. urlyt-dlp's cookie FAQhttps://github.com/yt-dlp/yt-dlp/wiki/FAQ
 
-For a bot running on the same computer as your browser, you can set:
+**Important for GitHub Codespaces:** `YOUTUBE_BROWSER=chrome` only works when Chrome is actually installed in the same environment and has the relevant cookies. A normal Codespace does not have your Windows/Chrome profile, so point Eli-Mini at an exported cookies file instead.
 
-```text
-YOUTUBE_BROWSER=chrome
-```
-
-Replace `chrome` with the browser containing the YouTube session.
-
-For a bot running on a VPS/server, export a YouTube cookies file in Netscape format and set:
+For a Codespace/server, set:
 
 ```text
 YOUTUBE_COOKIES_FILE=/absolute/path/to/cookies.txt
 ```
 
-**Never commit `cookies.txt` to GitHub or share it.** Treat it like an authentication credential. The repository's `.gitignore` already ignores `.env`, but you should also keep your cookies file outside the repository.
+You can also keep the cookie file out of the working tree and load it through a Codespaces secret using a base64-encoded value:
 
-Cookies may stop working as YouTube rotates sessions, so this is an operational workaround rather than a permanent guarantee.
+```text
+YOUTUBE_COOKIES_B64=<base64-encoded-cookies.txt>
+```
+
+The cookies file must be in Mozilla/Netscape format. yt-dlp notes that YouTube rotates cookies, so exported cookies may need to be refreshed periodically. urlyt-dlp's YouTube extractor documentationhttps://github.com/yt-dlp/yt-dlp/wiki/Extractors
+
+**Never commit or publicly share YouTube cookies.** They are authentication credentials. Keep `cookies.txt` outside the repository, or store its base64 value as a private Codespaces secret.
 
 ### 6. Run Eli-Mini
 
