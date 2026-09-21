@@ -7,6 +7,7 @@ A simple Discord bot built with Python and [discord.py](https://discordpy.readth
 - `/ping` — checks that the bot is online.
 - `/hello` — greets a user.
 - `/about` — shows basic bot information.
+- `/join [channel]` — joins the selected voice channel, or your current voice channel if none is selected.
 - `/play <youtube-url>` — joins your current voice channel and plays the YouTube video's audio.
 - `/leave` — stops playback and leaves the voice channel.
 
