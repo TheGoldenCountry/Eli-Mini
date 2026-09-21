@@ -224,16 +224,20 @@ def extract_audio(url: str) -> tuple[str, str]:
 
 async def get_or_create_voice_client(
     interaction: discord.Interaction,
+    target_channel: discord.VoiceChannel | None = None,
 ) -> discord.VoiceClient:
     if interaction.guild is None:
         raise RuntimeError("This command can only be used inside a Discord server.")
 
-    member = interaction.user
-    voice_state = getattr(member, "voice", None)
-    if voice_state is None or voice_state.channel is None:
-        raise RuntimeError("Join a voice channel first, then run /join or /play.")
+    if target_channel is None:
+        member = interaction.user
+        voice_state = getattr(member, "voice", None)
+        if voice_state is None or voice_state.channel is None:
+            raise RuntimeError(
+                "You are not in a voice channel. Choose a channel with /join channel:."
+            )
+        target_channel = voice_state.channel
 
-    target_channel = voice_state.channel
     voice_client = discord.utils.get(bot.voice_clients, guild=interaction.guild)
 
     if voice_client is None:
@@ -263,16 +267,28 @@ async def about(interaction: discord.Interaction) -> None:
     )
 
 
-@bot.tree.command(name="join", description="Join the voice channel you are currently in.")
-async def join(interaction: discord.Interaction) -> None:
+@bot.tree.command(name="join", description="Join a voice channel.")
+@app_commands.describe(channel="The voice channel to join. Leave empty to join your current channel.")
+async def join(
+    interaction: discord.Interaction,
+    channel: discord.VoiceChannel | None = None,
+) -> None:
     try:
-        voice_client = await get_or_create_voice_client(interaction)
-        channel_name = voice_client.channel.name if voice_client.channel is not None else "your voice channel"
-        await interaction.response.send_message("Joined **" + channel_name + "**.")
+        voice_client = await get_or_create_voice_client(interaction, channel)
+        channel_name = (
+            voice_client.channel.name
+            if voice_client.channel is not None
+            else "the voice channel"
+        )
+        await interaction.response.send_message("🔊 Joined **" + channel_name + "**.")
     except discord.Forbidden:
-        await interaction.response.send_message("I do not have permission to join or speak in that voice channel.")
+        await interaction.response.send_message(
+            "I do not have permission to view or connect to that voice channel."
+        )
     except (discord.ClientException, RuntimeError) as exc:
-        await interaction.response.send_message("Could not join the voice channel: " + str(exc))
+        await interaction.response.send_message(
+            "❌ Could not join the voice channel: " + str(exc)
+        )
 
 
 @bot.tree.command(name="play", description="Join your voice channel and play a YouTube link.")
