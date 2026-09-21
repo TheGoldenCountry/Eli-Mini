@@ -31,3 +31,7 @@ Thumbs.db
 
 # Logs
 *.log
+# YouTube authentication cookies
+cookies.txt
+youtube-cookies*.txt
+*.cookies.txt
