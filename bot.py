@@ -27,15 +27,18 @@ YOUTUBE_COOKIES_B64 = os.getenv("YOUTUBE_COOKIES_B64")
 YOUTUBE_BROWSER = os.getenv("YOUTUBE_BROWSER")
 YOUTUBE_BROWSER_PATH = os.getenv("YOUTUBE_BROWSER_PATH", "/usr/bin/chromium")
 
-# Try clients that can work without a PO token first, then use mweb with the
-# WebPoClient provider. YouTube changes which clients work over time, so the
-# fallback chain is intentional.
+# When logged-in cookies are supplied, yt-dlp's implicit "default" client
+# selection can include tv_downgraded, which currently has a known YouTube
+# "The page needs to be reloaded" failure. Explicitly use the documented
+# default+web_embedded workaround first, then keep the other clients as
+# fallbacks because YouTube changes which clients work over time.
 YOUTUBE_CLIENT_PROFILES = (
+    ("default_web_embedded", ["default", "web_embedded"]),
     ("web_embedded", ["web_embedded"]),
     ("web_safari", ["web_safari"]),
     ("mweb", ["mweb"]),
-    ("default", None),
 )
+
 
 BASE_YTDL_OPTIONS = {
     "format": "bestaudio/best",
@@ -85,21 +88,14 @@ def _clean_error(message: str) -> str:
     return re.sub(r"\x1b\[[0-9;]*m", "", message)
 
 
-def _build_ytdl_options(player_clients: list[str] | None) -> dict:
+def _build_ytdl_options(player_clients: list[str]) -> dict:
     options = copy.deepcopy(BASE_YTDL_OPTIONS)
 
-    if player_clients:
-        options["extractor_args"] = {
-            "youtube": {
-                "player_client": player_clients,
-            }
+    options["extractor_args"] = {
+        "youtube": {
+            "player_client": player_clients,
         }
-    else:
-        options["extractor_args"] = {
-            "youtube": {
-                "player_client": ["default"],
-            }
-        }
+    }
 
     options["extractor_args"]["youtubepot-wpc"] = {
         "browser_path": YOUTUBE_BROWSER_PATH,
@@ -175,9 +171,16 @@ def extract_audio(url: str) -> tuple[str, str]:
             )
         raise RuntimeError(
             "YouTube is rejecting the Codespaces server IP as a bot. "
-            "Eli-Mini tried web_embedded, web_safari, mweb with the PO-token "
-            "provider, and the default client. For reliable server-side "
-            "playback, add YOUTUBE_COOKIES_B64 from a YouTube session."
+            "Eli-Mini tried multiple YouTube player clients. For reliable "
+            "server-side playback, add YOUTUBE_COOKIES_B64 from a YouTube session."
+        )
+
+    if "The page needs to be reloaded" in last_error:
+        raise RuntimeError(
+            "YouTube rejected all configured player clients with "
+            '"The page needs to be reloaded." '
+            "This is a current yt-dlp/YouTube issue. Try refreshing the "
+            "YouTube cookies if the problem persists."
         )
 
     raise RuntimeError(last_error)
