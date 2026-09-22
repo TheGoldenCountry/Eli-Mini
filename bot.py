@@ -14,7 +14,7 @@ from discord import app_commands
 from discord.ext import commands
 from dotenv import load_dotenv
 
-from reminders import ReminderManager, reminder_scheduler
+from reminders import ReminderManager, format_timestamp, reminder_scheduler
 
 
 load_dotenv()
@@ -466,7 +466,7 @@ async def reminders(interaction: discord.Interaction) -> None:
         lines.append(
             f"**#{item['id']}** · "
             f"{'🚨' if item['kind'] == 'alarm' else '⏰'} "
-            f"**{item['name']}** · <t:{int(__import__('datetime').datetime.fromisoformat(fire_at).timestamp())}:R>"
+            f"**{item['name']}** · {format_timestamp(fire_at)}"
         )
 
     await interaction.response.send_message(
