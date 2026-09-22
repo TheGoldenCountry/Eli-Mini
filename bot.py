@@ -151,6 +151,30 @@ async def on_ready() -> None:
         print(f"Lavalink URI: {LAVALINK_URI}")
 
         for guild in bot.guilds:
+            category = discord.utils.get(
+                guild.categories,
+                name=TEMP_VC_CATEGORY_NAME,
+            )
+            if category is None:
+                continue
+
+            for channel in category.voice_channels:
+                if _temp_vc_has_humans(channel):
+                    _cancel_temp_vc_timer(channel.id)
+                else:
+                    _schedule_temp_vc_deletion()
+
+
+def is_youtube_url(url: str) -> bool:
+    host = (urlparse(url).hostname or "").lower()
+    return host in {
+        "youtube.com",
+        "www.youtube.com",
+        "youtu.be",
+        "music.youtube.com",
+    }
+
+
 async def _ensure_lavalink_node() -> wavelink.Node:
     try:
         node = wavelink.Pool.get_node("local")
