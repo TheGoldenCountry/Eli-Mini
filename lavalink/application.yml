@@ -1,0 +1,72 @@
+server:
+  # Keep Lavalink private to the Codespace. The Python bot connects locally.
+  address: 127.0.0.1
+  port: 2333
+
+lavalink:
+  plugins:
+    - dependency: "dev.lavalink.youtube:youtube-plugin:1.18.2"
+      snapshot: false
+
+  pluginsDir: "./lavalink/plugins"
+
+  server:
+    password: "${LAVALINK_PASSWORD:eliminimini}"
+    sources:
+      # The built-in YouTube source is deprecated. youtube-source replaces it.
+      youtube: false
+      bandcamp: true
+      soundcloud: true
+      twitch: true
+      vimeo: true
+      nico: true
+      http: false
+      local: false
+
+    filters:
+      volume: true
+      equalizer: true
+      karaoke: true
+      timescale: true
+      tremolo: true
+      vibrato: true
+      distortion: true
+      rotation: true
+      channelMix: true
+      lowPass: true
+
+    # Keep the node small for a Codespace.
+    bufferDurationMs: 400
+    frameBufferDurationMs: 5000
+    opusEncodingQuality: 5
+    resamplingQuality: LOW
+    trackStuckThresholdMs: 5000
+    playerUpdateInterval: 5
+    youtubePlaylistLoadLimit: 3
+    youtubeSearchEnabled: true
+    soundcloudSearchEnabled: true
+    gc-warnings: true
+
+plugins:
+  youtube:
+    enabled: true
+    allowSearch: true
+
+    # These clients are tried by youtube-source. No proxy is configured here.
+    clients:
+      - WEB
+      - MWEB
+      - WEBEMBEDDED
+      - ANDROID_VR
+      - TVHTML5_SIMPLY
+
+    # Optional fallback for YouTube bot challenges.
+    #
+    # Enable this with:
+    #   LAVALINK_YOUTUBE_OAUTH_ENABLED=true
+    #
+    # For first-time OAuth setup, leave refreshToken unset and start Lavalink
+    # in the foreground. It will print a device-code flow to the terminal.
+    # Use a separate/burner YouTube account, not your primary account.
+    oauth:
+      enabled: ${LAVALINK_YOUTUBE_OAUTH_ENABLED:false}
