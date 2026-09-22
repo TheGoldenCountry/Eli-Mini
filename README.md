@@ -87,7 +87,7 @@ Reminders and alarms are stored in a local SQLite database (`reminders.db`) so t
 
 The bot sends these directly to your Discord DMs, so your account must allow DMs from the bot. The scheduled timestamp is shown using Discord's localized timestamp display.
 
-Discord's standard bot API does not provide `discord.py` bots with a way to initiate a one-to-one DM voice call. For that reason, an `/alarm` sends the alarm DM and tells you to open the DM and start the call yourself. Discord's user-facing documentation describes DM voice calls as being started from the Discord client. citehttps://support.discord.com/hc/en-us/articles/360041721052-Video-Calls
+Discord's standard bot API does not provide `discord.py` bots with a way to initiate a one-to-one DM voice call. For that reason, an `/alarm` sends the alarm DM and tells you to open the DM and start the call yourself. Discord's user-facing documentation describes starting DM voice calls from the Discord client: https://support.discord.com/hc/en-us/articles/360041721052-Video-Calls
 
 ### 6. YouTube playback in GitHub Codespaces
 
