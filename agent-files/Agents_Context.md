@@ -20,12 +20,12 @@ Known current characteristics:
 
 - `bot.py` contains the main bot and command behavior.
 - Current commands include `/ping`, `/hello`, `/about`, `/join`, `/play`, and `/leave`.
-- Voice connection/playback logic is currently in the bot implementation.
-- YouTube extraction/playback currently uses yt-dlp and FFmpeg-related tooling.
-- Existing yt-dlp configuration includes support for cookies, proxy configuration, PO-token configuration, Chromium, and temporary cookie handling.
-- Current requirements include `discord.py[voice]`, `python-dotenv`, `yt-dlp[default]`, and `yt-dlp-getpot-wpc`.
-- The development container currently uses Python 3.12 Bookworm, Node 22, Chromium, and FFmpeg.
-- There is not yet an established persistent database layer, Node API, durable reminder scheduler, Media Group subsystem, Watch Session subsystem, or mature backend permission system.
+- Voice connection/playback logic is currently in the bot implementation through Wavelink.
+- YouTube playback uses a local Lavalink 4.2.2 node with the youtube-source 1.18.2 plugin; the Python bot no longer runs yt-dlp/FFmpeg directly and does not depend on a YouTube proxy or browser-cookie export.
+- Wavelink 3.5.2 is used as the Python Lavalink client and includes Discord DAVE support.
+- The development container uses Python 3.12 Bookworm, Node 22, and Java 21. Chromium and local FFmpeg are no longer required for YouTube playback.
+- `reminders.py` currently provides a durable local SQLite reminder/alarm scheduler. The long-term architecture still intends for reminders to move to PostgreSQL behind the Node backend.
+- There is not yet an established Node API, Media Group subsystem, or Watch Session subsystem.
 
 The existing implementation is evidence about what exists today, not a constraint on the target architecture.
 
