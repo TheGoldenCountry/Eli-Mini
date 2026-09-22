@@ -34,6 +34,10 @@ YOUTUBE_PROXY_USERNAME = os.getenv("YOUTUBE_PROXY_USERNAME")
 YOUTUBE_PROXY_PASSWORD = os.getenv("YOUTUBE_PROXY_PASSWORD")
 YOUTUBE_PROXY_SESSION = os.getenv("YOUTUBE_PROXY_SESSION", "elimini")
 
+TEMP_VC_CATEGORY_NAME = "Eli-Mini Temporary VCs"
+TEMP_VC_INACTIVITY_SECONDS = 180
+_temp_vc_delete_tasks: dict[int, asyncio.Task[None]] = {}
+
 # YouTube currently has a known failure where authenticated sessions select
 # tv_downgraded and return "The page needs to be reloaded". The upstream
 # workaround is to try default + web_embedded first. Some sessions still
@@ -73,6 +77,68 @@ class EliMini(commands.Bot):
 bot = EliMini()
 
 
+def _cancel_temp_vc_timer(channel_id: int) -> None:
+    task = _temp_vc_delete_tasks.pop(channel_id, None)
+    if task is not None and not task.done():
+        task.cancel()
+
+
+def _schedule_temp_vc_deletion(channel: discord.VoiceChannel) -> None:
+    _cancel_temp_vc_timer(channel.id)
+    if not channel.members:
+        _temp_vc_delete_tasks[channel.id] = asyncio.create_task(
+            _delete_temp_vc_after_inactivity(channel.id)
+        )
+
+
+async def _delete_temp_vc_after_inactivity(channel_id: int) -> None:
+    try:
+        await asyncio.sleep(TEMP_VC_INACTIVITY_SECONDS)
+
+        channel = bot.get_channel(channel_id)
+        if not isinstance(channel, discord.VoiceChannel):
+            return
+
+        # Re-check immediately before deletion so a recently joined user keeps it.
+        if channel.members:
+            return
+
+        await channel.delete(reason="Temporary voice channel inactive for 3 minutes.")
+    except asyncio.CancelledError:
+        return
+    except discord.NotFound:
+        return
+    except discord.Forbidden:
+        print(
+            f"Could not delete temporary voice channel {channel_id}: "
+            "missing Manage Channels permission."
+        )
+    except discord.HTTPException as exc:
+        print(
+            f"Could not delete temporary voice channel {channel_id}: "
+            f"Discord returned an HTTP error: {exc}"
+        )
+    finally:
+        task = _temp_vc_delete_tasks.get(channel_id)
+        if task is asyncio.current_task():
+            _temp_vc_delete_tasks.pop(channel_id, None)
+
+
+async def _get_temp_vc_category(guild: discord.Guild) -> discord.CategoryChannel:
+    category = discord.utils.get(
+        guild.categories,
+        name=TEMP_VC_CATEGORY_NAME,
+    )
+    if category is not None:
+        return category
+
+    return await guild.create_category(
+        TEMP_VC_CATEGORY_NAME,
+        reason="Create category for Eli-Mini temporary voice channels.",
+    )
+
+
+
 @bot.event
 async def on_ready() -> None:
     if bot.user is not None:
@@ -86,6 +152,20 @@ async def on_ready() -> None:
             "YouTube proxy: "
             f"{'configured' if _get_youtube_proxy() else 'not configured'}"
         )
+
+        for guild in bot.guilds:
+            category = discord.utils.get(
+                guild.categories,
+                name=TEMP_VC_CATEGORY_NAME,
+            )
+            if category is None:
+                continue
+
+            for channel in category.voice_channels:
+                if channel.members:
+                    _cancel_temp_vc_timer(channel.id)
+                else:
+                    _schedule_temp_vc_deletion(channel)
 
 
 def _package_version(name: str) -> str | None:
@@ -298,6 +378,89 @@ async def join(
             "❌ Could not join the voice channel: " + str(exc)
         )
 
+
+@bot.tree.command(
+    name="tempvc",
+    description="Create a temporary voice channel that deletes after 3 minutes empty.",
+)
+@app_commands.describe(name="The name for your temporary voice channel")
+async def tempvc(interaction: discord.Interaction, name: str) -> None:
+    if interaction.guild is None:
+        await interaction.response.send_message(
+            "❌ This command can only be used inside a Discord server."
+        )
+        return
+
+    channel_name = name.strip()
+    if not channel_name:
+        await interaction.response.send_message(
+            "❌ Please provide a name for the temporary voice channel."
+        )
+        return
+
+    if len(channel_name) > 100:
+        await interaction.response.send_message(
+            "❌ The channel name must be 100 characters or fewer."
+        )
+        return
+
+    try:
+        category = await _get_temp_vc_category(interaction.guild)
+        channel = await interaction.guild.create_voice_channel(
+            channel_name,
+            category=category,
+            reason=f"Temporary VC created by {interaction.user} ({interaction.user.id}).",
+        )
+        _schedule_temp_vc_deletion(channel)
+
+        await interaction.response.send_message(
+            f"✅ Created {channel.mention}. It will be deleted after "
+            f"{TEMP_VC_INACTIVITY_SECONDS // 60} minutes with nobody connected."
+        )
+    except discord.Forbidden:
+        await interaction.response.send_message(
+            "❌ I need the **Manage Channels** permission to create temporary voice channels."
+        )
+    except discord.HTTPException as exc:
+        await interaction.response.send_message(
+            f"❌ I couldn't create the temporary voice channel: {exc}"
+        )
+
+
+
+
+@bot.event
+async def on_voice_state_update(
+    member: discord.Member,
+    before: discord.VoiceState,
+    after: discord.VoiceState,
+) -> None:
+    """Start/cancel the three-minute empty-channel timer."""
+    channels: list[discord.VoiceChannel] = []
+
+    if isinstance(before.channel, discord.VoiceChannel):
+        channels.append(before.channel)
+    if (
+        isinstance(after.channel, discord.VoiceChannel)
+        and (before.channel is None or before.channel.id != after.channel.id)
+    ):
+        channels.append(after.channel)
+
+    for channel in channels:
+        if channel.category_id is None:
+            continue
+
+        category = discord.utils.get(
+            channel.guild.categories,
+            id=channel.category_id,
+        )
+        if category is None or category.name != TEMP_VC_CATEGORY_NAME:
+            continue
+
+        if channel.members:
+            _cancel_temp_vc_timer(channel.id)
+        else:
+            _schedule_temp_vc_deletion(channel)
 
 @bot.tree.command(name="play", description="Join your voice channel and play a YouTube link.")
 @app_commands.describe(url="A YouTube video URL")
