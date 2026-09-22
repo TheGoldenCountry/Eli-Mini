@@ -162,7 +162,7 @@ async def on_ready() -> None:
                 if _temp_vc_has_humans(channel):
                     _cancel_temp_vc_timer(channel.id)
                 else:
-                    _schedule_temp_vc_deletion()
+                    _schedule_temp_vc_deletion(channel)
 
 
 def is_youtube_url(url: str) -> bool:
