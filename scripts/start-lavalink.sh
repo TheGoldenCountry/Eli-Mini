@@ -3,6 +3,7 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 LAVALINK_DIR="$ROOT_DIR/lavalink"
+cd "$LAVALINK_DIR"
 JAR_PATH="$LAVALINK_DIR/Lavalink.jar"
 LOG_PATH="$LAVALINK_DIR/lavalink.log"
 PID_PATH="$LAVALINK_DIR/lavalink.pid"
