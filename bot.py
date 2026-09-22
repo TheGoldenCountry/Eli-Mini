@@ -83,9 +83,13 @@ def _cancel_temp_vc_timer(channel_id: int) -> None:
         task.cancel()
 
 
+def _temp_vc_has_humans(channel: discord.VoiceChannel) -> bool:
+    return any(not member.bot for member in channel.members)
+
+
 def _schedule_temp_vc_deletion(channel: discord.VoiceChannel) -> None:
     _cancel_temp_vc_timer(channel.id)
-    if not channel.members:
+    if not _temp_vc_has_humans(channel):
         _temp_vc_delete_tasks[channel.id] = asyncio.create_task(
             _delete_temp_vc_after_inactivity(channel.id)
         )
@@ -100,7 +104,7 @@ async def _delete_temp_vc_after_inactivity(channel_id: int) -> None:
             return
 
         # Re-check immediately before deletion so a recently joined user keeps it.
-        if channel.members:
+        if _temp_vc_has_humans(channel):
             return
 
         await channel.delete(reason="Temporary voice channel inactive for 3 minutes.")
@@ -162,7 +166,7 @@ async def on_ready() -> None:
                 continue
 
             for channel in category.voice_channels:
-                if channel.members:
+                if _temp_vc_has_humans(channel):
                     _cancel_temp_vc_timer(channel.id)
                 else:
                     _schedule_temp_vc_deletion(channel)
@@ -457,7 +461,7 @@ async def on_voice_state_update(
         if category is None or category.name != TEMP_VC_CATEGORY_NAME:
             continue
 
-        if channel.members:
+        if _temp_vc_has_humans(channel):
             _cancel_temp_vc_timer(channel.id)
         else:
             _schedule_temp_vc_deletion(channel)
