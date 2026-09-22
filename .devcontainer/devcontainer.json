@@ -10,7 +10,7 @@
     }
   },
   "containerEnv": {
-    "PATH": "/usr/local/python/current/bin:/usr/local/py-utils/bin:\${containerEnv:PATH}"
+    "PATH": "/usr/local/python/current/bin:/usr/local/py-utils/bin:${containerEnv:PATH}"
   },
   "postCreateCommand": "sudo apt-get update && sudo apt-get install -y --no-install-recommends curl && python -m pip install -U pip && python -m pip install -U -r requirements.txt",
   "postStartCommand": "bash scripts/start-lavalink.sh --background",
