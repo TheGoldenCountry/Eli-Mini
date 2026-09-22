@@ -178,23 +178,27 @@ def is_youtube_url(url: str) -> bool:
 async def _ensure_lavalink_node() -> wavelink.Node:
     try:
         node = wavelink.Pool.get_node("local")
-        if node.status == wavelink.NodeStatus.CONNECTED:
-            return node
     except wavelink.InvalidNodeException:
-        pass
+        await wavelink.Pool.connect(
+            nodes=[
+                wavelink.Node(
+                    identifier="local",
+                    uri=LAVALINK_URI,
+                    password=LAVALINK_PASSWORD,
+                    retries=0,
+                )
+            ],
+            client=bot,
+        )
+        node = wavelink.Pool.get_node("local")
 
-    await wavelink.Pool.connect(
-        nodes=[
-            wavelink.Node(
-                identifier="local",
-                uri=LAVALINK_URI,
-                password=LAVALINK_PASSWORD,
-                retries=0,
-            )
-        ],
-        client=bot,
-    )
-    return wavelink.Pool.get_node("local")
+    if node.status != wavelink.NodeStatus.CONNECTED:
+        raise RuntimeError(
+            "Lavalink is not connected. Start it with "
+            "'bash scripts/start-lavalink.sh' and try again."
+        )
+
+    return node
 
 
 async def get_or_create_voice_player(
