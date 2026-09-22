@@ -40,3 +40,9 @@ reminders.db
 cookies.txt
 youtube-cookies*.txt
 *.cookies.txt
+
+
+# Lavalink runtime files
+lavalink/Lavalink.jar
+lavalink/*.log
+lavalink/*.pid
