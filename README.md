@@ -1,6 +1,6 @@
 # Eli-Mini
 
-A simple Discord bot built with Python and [discord.py](https://discordpy.readthedocs.io/).
+A simple Discord bot built with Python, [discord.py](https://discordpy.readthedocs.io/), and [Wavelink](https://github.com/PythonistaGuild/Wavelink).
 
 ## Commands
 
@@ -13,7 +13,7 @@ A simple Discord bot built with Python and [discord.py](https://discordpy.readth
 - `/alarm <name> <amount> <unit>` — schedules a one-shot alarm and DMs you when it is due.
 - `/reminders` — lists your pending reminders and alarms.
 - `/cancelreminder <reminder-id>` — cancels one of your pending reminders or alarms.
-- `/play <youtube-url>` — joins your current voice channel and plays the YouTube video's audio.
+- `/play <youtube-url>` — joins your current voice channel and plays a YouTube video through Lavalink.
 - `/leave` — stops playback and leaves the voice channel.
 
 ## Setup
@@ -29,160 +29,112 @@ In the Discord Developer Portal:
 
 The bot needs permission to **View Channel**, **Connect**, **Speak**, and **Manage Channels**. **Manage Channels** is required for `/tempvc` to create and delete channels. The invite should include the **bot** and **applications.commands** scopes.
 
-### 2. Install Python dependencies
+### 2. Codespaces environment
 
-Create a fresh virtual environment:
+This project is configured for Python 3.12 and includes Java 21 in the dev container.
 
-```bash
-python -m venv .venv
-```
+Rebuild the Codespace after pulling these changes:
 
-Windows:
+**Command Palette → Codespaces: Rebuild Container**
 
-```powershell
-.venv\\Scripts\\activate
-```
+The rebuild installs Wavelink and the Java runtime needed for Lavalink.
 
-macOS/Linux:
+### 3. Configure the environment
 
-```bash
-source .venv/bin/activate
-```
-
-Then:
-
-```bash
-python -m pip install -r requirements.txt
-```
-
-### 3. Install FFmpeg
-
-FFmpeg must be installed and available on PATH unless `FFMPEG_PATH` points to the executable.
-
-Verify it with:
-
-```bash
-ffmpeg -version
-```
-
-### 4. Configure the token
-
-Copy `.env.example` to `.env` and set your token:
+Copy `.env.example` to `.env` and set:
 
 ```text
 DISCORD_TOKEN=your-real-token
-FFMPEG_PATH=ffmpeg
+LAVALINK_URI=http://127.0.0.1:2333
+LAVALINK_PASSWORD=eliminimini
 ```
 
 Do not commit `.env`.
 
-### 5. Reminders and alarms
+### 4. Lavalink
 
-Reminders and alarms are stored in a local SQLite database (`reminders.db`) so they survive normal bot restarts. They use a relative delay from the time you run the command. For example:
+Eli-Mini now uses Lavalink instead of running yt-dlp/FFmpeg directly for YouTube playback.
+
+The repository contains:
+
+- `lavalink/application.yml` — local Lavalink server configuration.
+- `scripts/start-lavalink.sh` — downloads Lavalink 4.2.2 on first use and starts it.
+- `Wavelink 3.5.2` — the Python client used by Eli-Mini.
+- `youtube-source 1.18.2` — the Lavalink YouTube plugin.
+
+Lavalink 4.2.2 is the current stable Lavalink release, and Wavelink 3.5.2 includes Discord DAVE support. urlLavalink releaseshttps://github.com/lavalink-devs/Lavalink/releases urlWavelink releaseshttps://github.com/PythonistaGuild/Wavelink/releases
+
+The Codespace normally starts Lavalink automatically when the container starts. To start it manually:
+
+```bash
+bash scripts/start-lavalink.sh
+```
+
+To run it in the background:
+
+```bash
+bash scripts/start-lavalink.sh --background
+```
+
+The background log is:
+
+```text
+lavalink/lavalink.log
+```
+
+### 5. YouTube playback
+
+Lavalink uses the `youtube-source` plugin, which supports multiple YouTube InnerTube clients and can use OAuth as an optional authentication fallback. The plugin currently documents clients such as `WEB`, `MWEB`, `WEBEMBEDDED`, `ANDROID_VR`, and `TVHTML5_SIMPLY`. urlyoutube-source documentationhttps://github.com/lavalink-devs/youtube-source/blob/main/README.md
+
+No YouTube proxy, exported browser cookie file, Chromium installation, yt-dlp executable, or local FFmpeg process is required by Eli-Mini's playback code.
+
+This does **not** guarantee that YouTube will never challenge a Lavalink server. YouTube can change its anti-bot behavior. The advantage is that the YouTube extraction and audio transport are handled by Lavalink plus `youtube-source`, rather than by the Python bot directly.
+
+### 6. Optional YouTube OAuth fallback
+
+When YouTube continues to challenge the Lavalink server, `youtube-source` supports OAuth. Its documentation recommends using a burner account rather than a primary YouTube account and warns that OAuth is not a guaranteed solution. urlyoutube-source OAuth documentationhttps://github.com/lavalink-devs/youtube-source/blob/main/README.md#using-oauth-tokens
+
+The repository leaves OAuth disabled by default.
+
+To enable it:
+
+1. Set `LAVALINK_YOUTUBE_OAUTH_ENABLED=true` in your Codespace environment.
+2. Start Lavalink in the foreground with `bash scripts/start-lavalink.sh`.
+3. Follow the device-code instructions printed by Lavalink.
+4. Save the refresh token Lavalink gives you as a Codespaces secret named `LAVALINK_YOUTUBE_REFRESH_TOKEN`.
+5. Add `refreshToken` to the `plugins.youtube.oauth` section in `lavalink/application.yml`.
+6. Restart Lavalink and Eli-Mini.
+
+Do not commit the refresh token.
+
+### 7. Reminders and alarms
+
+Reminders and alarms are stored in `reminders.db` so they survive normal bot restarts.
+
+Examples:
 
 ```text
 /reminder name:Homework amount:2 unit:hours
-/alarm name:Wake up amount:1 unit:days
+/alarm name:Wake Up amount:1 unit:days
 ```
 
-The bot sends these directly to your Discord DMs, so your account must allow DMs from the bot. The scheduled timestamp is shown using Discord's localized timestamp display.
+The bot sends reminders directly to your Discord DMs. Discord must allow the bot to DM you.
 
-Discord's standard bot API does not provide `discord.py` bots with a way to initiate a one-to-one DM voice call. For that reason, an `/alarm` sends the alarm DM and tells you to open the DM and start the call yourself. Discord's user-facing documentation describes starting DM voice calls from the Discord client: https://support.discord.com/hc/en-us/articles/360041721052-Video-Calls
+### 8. Run Eli-Mini
 
-### 6. YouTube playback in GitHub Codespaces
-
-YouTube currently uses several anti-bot and Proof of Origin (PO) Token checks. yt-dlp's current guidance recommends PO Token Provider plugins for clients that require them. The WebPoClient provider can mint PO tokens in Chromium and is installed by this project. urlyt-dlp PO Token Guidehttps://github.com/yt-dlp/yt-dlp/wiki/Po-Token-Guide
-
-This project uses the **current yt-dlp PO-token provider API** through `yt-dlp-getpot-wpc`. The old `yt-dlp-get-pot` framework is deprecated and is intentionally **not** installed. The WPC provider's current source imports yt-dlp's built-in PO-token provider classes directly. urlWebPoClient PO Token Providerhttps://github.com/coletdjnz/yt-dlp-getpot-wpc urlDeprecated GetPOT frameworkhttps://github.com/coletdjnz/yt-dlp-get-pot
-
-The bot tries several YouTube client paths:
-
-1. `web_embedded`
-2. `web_safari`
-3. `mweb` with the WebPoClient PO-token provider
-4. yt-dlp's default client
-
-That fallback is deliberate: current YouTube behavior varies by client and by server IP. The current yt-dlp PO Token Guide notes that `web_safari` can expose HLS formats that do not currently require a GVS PO token, while `mweb` requires one for GVS. urlyt-dlp PO Token Guidehttps://github.com/yt-dlp/yt-dlp/wiki/Po-Token-Guide
-
-The Codespaces container installs:
-
-- Chromium
-- FFmpeg
-- `yt-dlp-getpot-wpc`
-- yt-dlp
-
-**For an existing Codespace:** rebuild the container after pulling these changes using **Command Palette → Codespaces: Rebuild Container**. This project deliberately uses Python 3.12 because the current WebPoClient dependency chain has a known import failure under Python 3.14. After rebuilding, verify that `python --version` reports Python 3.12.x and that `which python` points into `.venv/bin/python`. urlWebPoClient Python 3.14 import issuehttps://github.com/coletdjnz/yt-dlp-getpot-wpc/issues/7
-
-### 7. Verify the PO-token provider
-
-In the Codespace, run:
-
-```bash
-git pull origin main
-python -m pip uninstall -y yt-dlp-get-pot
-python -m pip install -U -r requirements.txt
-python -m yt_dlp -v "https://www.youtube.com/watch?v=PKcpv05bHbc" 2>&1 | grep -i "PO Token Providers"
-```
-
-With the current WPC provider loaded, the yt-dlp documentation says the verbose output should include a provider such as:
-
-```text
-[debug] [youtube] [pot] PO Token Providers: wpc-1.1.2 (external)
-```
-
-The WebPoClient package requires yt-dlp 2025.09.26 or newer and Chrome/Chromium. urlWebPoClient PO Token Providerhttps://github.com/coletdjnz/yt-dlp-getpot-wpc
-
-If the output still says `none`, check the same Python environment explicitly:
-
-```bash
-python -m pip show yt-dlp
-python -m pip show yt-dlp-getpot-wpc
-python -c "import yt_dlp_plugins.extractor.getpot_wpc as wpc; print(wpc.__file__)"
-```
-
-Those commands distinguish a missing package from a provider-loading problem.
-
-### 8. If YouTube still says "Sign in to confirm you're not a bot"
-
-A GitHub Codespaces server IP can still be challenged by YouTube. In that case, use a YouTube `cookies.txt` exported from a browser session and provide it to the Codespace as `YOUTUBE_COOKIES_B64`.
-
-Do **not** commit the cookies file or put it in the repository.
-
-The bot already supports:
-
-```text
-YOUTUBE_COOKIES_FILE=/absolute/path/to/cookies.txt
-```
-
-or:
-
-```text
-YOUTUBE_COOKIES_B64=<base64-encoded-cookies.txt>
-```
-
-On Windows PowerShell, after exporting `cookies.txt`, you can base64-encode it with:
-
-```powershell
-[Convert]::ToBase64String([IO.File]::ReadAllBytes("cookies.txt"))
-```
-
-Paste the resulting value into a Codespaces secret/environment variable named `YOUTUBE_COOKIES_B64`.
-
-### 9. Run Eli-Mini
+With Lavalink running:
 
 ```bash
 python bot.py
 ```
 
-### 10. Play a YouTube video
-
-Join a voice channel, then run:
+Then join a voice channel and run:
 
 ```text
 /play url:https://www.youtube.com/watch?v=...
 ```
 
-Eli-Mini joins your channel and starts playing the video's audio. Running `/play` again stops the current track and starts the new one.
+Running `/play` again replaces the current track.
 
 Use:
 
@@ -194,4 +146,6 @@ to stop playback and disconnect.
 
 ## Notes
 
-The bot uses yt-dlp to extract a playable media URL rather than downloading the video to disk. YouTube changes its delivery and anti-bot systems frequently, so server-side YouTube playback can occasionally break and require a new yt-dlp/provider update.
+Lavalink is a separate audio server process. Eli-Mini connects to the local node at `127.0.0.1:2333` by default.
+
+YouTube changes its delivery and anti-bot systems frequently, so playback can still require updates to `youtube-source` or its configured client set.
