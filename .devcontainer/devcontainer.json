@@ -4,16 +4,16 @@
   "features": {
     "ghcr.io/devcontainers/features/node:1": {
       "version": "22"
+    },
+    "ghcr.io/devcontainers/features/java:1": {
+      "version": "21"
     }
   },
   "containerEnv": {
-    "PATH": "/usr/local/python/current/bin:/usr/local/py-utils/bin:${containerEnv:PATH}"
+    "PATH": "/usr/local/python/current/bin:/usr/local/py-utils/bin:\${containerEnv:PATH}"
   },
-  "postCreateCommand": "sudo apt-get update && sudo apt-get install -y --no-install-recommends chromium ffmpeg && python -m pip install -U pip && python -m pip install -U --pre -r requirements.txt",
-  "postStartCommand": "python -m pip install -U --pre -r requirements.txt",
-  "remoteEnv": {
-    "YOUTUBE_BROWSER_PATH": "/usr/bin/chromium"
-  },
+  "postCreateCommand": "sudo apt-get update && sudo apt-get install -y --no-install-recommends curl && python -m pip install -U pip && python -m pip install -U -r requirements.txt",
+  "postStartCommand": "bash scripts/start-lavalink.sh --background",
   "customizations": {
     "vscode": {
       "settings": {
