@@ -14,6 +14,8 @@ from discord import app_commands
 from discord.ext import commands
 from dotenv import load_dotenv
 
+from reminders import ReminderManager, reminder_scheduler
+
 
 load_dotenv()
 
@@ -33,6 +35,9 @@ YOUTUBE_PROXY_PORT = os.getenv("YOUTUBE_PROXY_PORT", "30000")
 YOUTUBE_PROXY_USERNAME = os.getenv("YOUTUBE_PROXY_USERNAME")
 YOUTUBE_PROXY_PASSWORD = os.getenv("YOUTUBE_PROXY_PASSWORD")
 YOUTUBE_PROXY_SESSION = os.getenv("YOUTUBE_PROXY_SESSION", "elimini")
+REMINDERS_DB_PATH = os.getenv("REMINDERS_DB_PATH", "reminders.db")
+REMINDER_MAX_NAME_LENGTH = 100
+REMINDER_MAX_AMOUNT = 100_000
 
 TEMP_VC_CATEGORY_NAME = "Eli-Mini Temporary VCs"
 TEMP_VC_INACTIVITY_SECONDS = 180
@@ -75,6 +80,8 @@ class EliMini(commands.Bot):
 
 
 bot = EliMini()
+reminder_manager = ReminderManager(REMINDERS_DB_PATH)
+_reminder_scheduler_task: asyncio.Task[None] | None = None
 
 
 def _cancel_temp_vc_timer(channel_id: int) -> None:
@@ -142,9 +149,23 @@ async def _get_temp_vc_category(guild: discord.Guild) -> discord.CategoryChannel
     )
 
 
+REMINDER_TIME_CHOICES = [
+    app_commands.Choice(name="hours", value="hours"),
+    app_commands.Choice(name="days", value="days"),
+    app_commands.Choice(name="weeks", value="weeks"),
+    app_commands.Choice(name="years", value="years"),
+]
+
 
 @bot.event
 async def on_ready() -> None:
+    global _reminder_scheduler_task
+
+    if _reminder_scheduler_task is None or _reminder_scheduler_task.done():
+        _reminder_scheduler_task = asyncio.create_task(
+            reminder_scheduler(bot, reminder_manager)
+        )
+
     if bot.user is not None:
         provider_version = _package_version("yt-dlp-getpot-wpc")
         chromium = shutil.which("chromium") or YOUTUBE_BROWSER_PATH
@@ -338,6 +359,138 @@ async def get_or_create_voice_client(
         await voice_client.move_to(target_channel)
 
     return voice_client
+
+
+@bot.tree.command(
+    name="reminder",
+    description="DM you a named reminder after a chosen amount of time.",
+)
+@app_commands.describe(
+    name="The name/text of the reminder.",
+    amount="How many units from now.",
+    unit="Hours, days, weeks, or years.",
+)
+@app_commands.choices(unit=REMINDER_TIME_CHOICES)
+async def reminder(
+    interaction: discord.Interaction,
+    name: str,
+    amount: app_commands.Range[int, 1, REMINDER_MAX_AMOUNT],
+    unit: app_commands.Choice[str],
+) -> None:
+    reminder_name = name.strip()
+    if not reminder_name:
+        await interaction.response.send_message(
+            "❌ Please give the reminder a name."
+        )
+        return
+    if len(reminder_name) > REMINDER_MAX_NAME_LENGTH:
+        await interaction.response.send_message(
+            f"❌ The reminder name must be {REMINDER_MAX_NAME_LENGTH} characters or fewer."
+        )
+        return
+
+    reminder_id, fire_at = reminder_manager.create(
+        interaction.user.id,
+        reminder_name,
+        amount,
+        unit.value,
+        "reminder",
+    )
+
+    await interaction.response.send_message(
+        f"✅ Reminder **#{reminder_id} — {reminder_name}** set for "
+        f"<t:{int(fire_at.timestamp())}:F> (<t:{int(fire_at.timestamp())}:R>). "
+        "I’ll DM you when it is due."
+    )
+
+
+@bot.tree.command(
+    name="alarm",
+    description="DM you an alarm after a chosen amount of time.",
+)
+@app_commands.describe(
+    name="The name/text of the alarm.",
+    amount="How many units from now.",
+    unit="Hours, days, weeks, or years.",
+)
+@app_commands.choices(unit=REMINDER_TIME_CHOICES)
+async def alarm(
+    interaction: discord.Interaction,
+    name: str,
+    amount: app_commands.Range[int, 1, REMINDER_MAX_AMOUNT],
+    unit: app_commands.Choice[str],
+) -> None:
+    alarm_name = name.strip()
+    if not alarm_name:
+        await interaction.response.send_message(
+            "❌ Please give the alarm a name."
+        )
+        return
+    if len(alarm_name) > REMINDER_MAX_NAME_LENGTH:
+        await interaction.response.send_message(
+            f"❌ The alarm name must be {REMINDER_MAX_NAME_LENGTH} characters or fewer."
+        )
+        return
+
+    alarm_id, fire_at = reminder_manager.create(
+        interaction.user.id,
+        alarm_name,
+        amount,
+        unit.value,
+        "alarm",
+    )
+
+    await interaction.response.send_message(
+        f"✅ Alarm **#{alarm_id} — {alarm_name}** set for "
+        f"<t:{int(fire_at.timestamp())}:F> (<t:{int(fire_at.timestamp())}:R>). "
+        "I’ll DM you when it is due."
+    )
+
+
+@bot.tree.command(
+    name="reminders",
+    description="List your pending reminders and alarms.",
+)
+async def reminders(interaction: discord.Interaction) -> None:
+    items = reminder_manager.get_user_reminders(interaction.user.id)
+
+    if not items:
+        await interaction.response.send_message(
+            "You do not have any pending reminders or alarms."
+        )
+        return
+
+    lines = []
+    for item in items:
+        fire_at = str(item["fire_at"])
+        lines.append(
+            f"**#{item['id']}** · "
+            f"{'🚨' if item['kind'] == 'alarm' else '⏰'} "
+            f"**{item['name']}** · <t:{int(__import__('datetime').datetime.fromisoformat(fire_at).timestamp())}:R>"
+        )
+
+    await interaction.response.send_message(
+        "**Your pending reminders:**\n" + "\n".join(lines)
+    )
+
+
+@bot.tree.command(
+    name="cancelreminder",
+    description="Cancel one of your pending reminders or alarms.",
+)
+@app_commands.describe(reminder_id="The ID shown by /reminders.")
+async def cancelreminder(
+    interaction: discord.Interaction,
+    reminder_id: app_commands.Range[int, 1, 2_147_483_647],
+) -> None:
+    if reminder_manager.cancel(reminder_id, interaction.user.id):
+        await interaction.response.send_message(
+            f"✅ Cancelled reminder/alarm **#{reminder_id}**."
+        )
+    else:
+        await interaction.response.send_message(
+            f"❌ I couldn't find **#{reminder_id}** on your account."
+        )
 
 
 @bot.tree.command(name="ping", description="Check whether Eli-Mini is online.")
