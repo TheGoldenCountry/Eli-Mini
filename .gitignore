@@ -31,6 +31,11 @@ Thumbs.db
 
 # Logs
 *.log
+
+# Local reminder database
+reminders.db
+*.db-shm
+*.db-wal
 # YouTube authentication cookies
 cookies.txt
 youtube-cookies*.txt
