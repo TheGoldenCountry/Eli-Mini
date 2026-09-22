@@ -8,6 +8,7 @@ A simple Discord bot built with Python and [discord.py](https://discordpy.readth
 - `/hello` — greets a user.
 - `/about` — shows basic bot information.
 - `/join [channel]` — joins the selected voice channel, or your current voice channel if none is selected.
+- `/tempvc <name>` — creates a named temporary voice channel in the `Eli-Mini Temporary VCs` category. The channel is deleted after 3 minutes with no human members connected.
 - `/play <youtube-url>` — joins your current voice channel and plays the YouTube video's audio.
 - `/leave` — stops playback and leaves the voice channel.
 
@@ -22,7 +23,7 @@ In the Discord Developer Portal:
 3. Copy the bot token.
 4. Keep the bot token private. Never commit it to Git.
 
-The bot needs permission to **View Channel**, **Connect**, and **Speak** in the voice channel. The invite should include the **bot** and **applications.commands** scopes.
+The bot needs permission to **View Channel**, **Connect**, **Speak**, and **Manage Channels**. **Manage Channels** is required for `/tempvc` to create and delete channels. The invite should include the **bot** and **applications.commands** scopes.
 
 ### 2. Install Python dependencies
 
