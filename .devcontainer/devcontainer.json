@@ -6,12 +6,5 @@
       "version": "3.12"
     }
   },
-  "postCreateCommand": "sudo apt-get update && sudo apt-get install -y --no-install-recommends curl && python -m pip install -U pip && python -m pip install -U -r requirements.txt",
-  "customizations": {
-    "vscode": {
-      "settings": {
-        "python.defaultInterpreterPath": "/usr/local/bin/python"
-      }
-    }
-  }
+  "postCreateCommand": "sudo apt-get update && sudo apt-get install -y --no-install-recommends curl && python -m pip install -U pip && python -m pip install -U -r requirements.txt"
 }
